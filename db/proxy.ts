@@ -87,6 +87,34 @@ export type VerificationCode = {
   user?: User
 }
 
+export type Concept = {
+  id?: null | number
+  name: string
+}
+
+export type Theme = {
+  id?: null | number
+  name: string
+}
+
+export type ConceptTheme = {
+  id?: null | number
+  concept_id: number
+  concept?: Concept
+  theme_id: number
+  theme?: Theme
+}
+
+export type ConceptCompare = {
+  id?: null | number
+  user_id: number
+  user?: User
+  small_id: number
+  small?: Concept
+  large_id: number
+  large?: Concept
+}
+
 export type DBProxy = {
   method: Method[]
   url: Url[]
@@ -99,6 +127,10 @@ export type DBProxy = {
   request_log: RequestLog[]
   verification_attempt: VerificationAttempt[]
   verification_code: VerificationCode[]
+  concept: Concept[]
+  theme: Theme[]
+  concept_theme: ConceptTheme[]
+  concept_compare: ConceptCompare[]
 }
 
 export let proxy = proxySchema<DBProxy>({
@@ -129,6 +161,19 @@ export let proxy = proxySchema<DBProxy>({
       /* foreign references */
       ['match', { field: 'match_id', table: 'verification_attempt' }],
       ['user', { field: 'user_id', table: 'user' }],
+    ],
+    concept: [],
+    theme: [],
+    concept_theme: [
+      /* foreign references */
+      ['concept', { field: 'concept_id', table: 'concept' }],
+      ['theme', { field: 'theme_id', table: 'theme' }],
+    ],
+    concept_compare: [
+      /* foreign references */
+      ['user', { field: 'user_id', table: 'user' }],
+      ['small', { field: 'small_id', table: 'concept' }],
+      ['large', { field: 'large_id', table: 'concept' }],
     ],
   },
 })
