@@ -1,6 +1,9 @@
 import { o } from '../jsx/jsx.js'
 import { prerender } from '../jsx/html.js'
 import SourceCode from '../components/source-code.js'
+import { mapArray } from '../components/fragment.js'
+import { proxy } from '../../../db/proxy.js'
+import { Link } from '../components/router.js'
 
 // Calling <Component/> will transform the JSX into AST for each rendering.
 // You can reuse a pre-compute AST like `let component = <Component/>`.
@@ -10,28 +13,38 @@ import SourceCode from '../components/source-code.js'
 
 let content = (
   <div id="home">
-    <h1>Home Page</h1>
-    <p>You can get started by replacing the contents in this page</p>
-    <p>
-      When the browser load this url, the server responses complete html content
-      to the GET request. This allows the browser to perform meaningful paint as
-      soon as possible. And it's ideal for SEO.
-    </p>
-    <p>
-      Try some reactive demo:{' '}
-      <a href="https://liveviews.cc/thermostat" target="_blank">
-        Thermostat
-      </a>
-      ,{' '}
-      <a href="https://liveviews.cc/form" target="_blank">
-        Form Demo
-      </a>
-    </p>
-    <SourceCode page="home.tsx" />
+    {
+      // And it can be pre-rendered into html as well
+      prerender(
+        <>
+          <h1>Home Page</h1>
+          <p>Match your partner sharing similar values.</p>
+          <h2>Get started</h2>
+          <ul>
+            <li>
+              <Link href="/vote">vote</Link>
+            </li>
+            <li>
+              <Link href="/match">match</Link>
+            </li>
+          </ul>
+          <h2>Stats</h2>
+        </>,
+      )
+    }
+    <Stats />
+    {prerender(<SourceCode page="home.tsx" />)}
   </div>
 )
 
-// And it can be pre-rendered into html as well
-let Home = prerender(content)
+function Stats() {
+  return (
+    <p>
+      <b>{proxy.user.length} users</b> has made{' '}
+      <b>{proxy.concept_compare.length} votes</b> on{' '}
+      <b>{proxy.concept.length} concepts</b>.
+    </p>
+  )
+}
 
-export default Home
+export default content

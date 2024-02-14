@@ -1,3 +1,4 @@
+import Vote from './pages/vote.js'
 import AppNotice from './pages/app-notice.js'
 import AppChat from './pages/app-chat.js'
 import AppSettings from './pages/app-settings.js'
@@ -73,6 +74,7 @@ export type Routes = Record<string, PageRoute>
 
 // TODO direct support alternative urls instead of having to repeat the entry
 let routeDict: Routes = {
+  ...Vote.routes,
   ...AppNotice.routes,
   ...AppChat.routes,
   ...AppSettings.routes,
