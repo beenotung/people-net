@@ -193,7 +193,6 @@ let routes: Routes = {
   '/__url__': {
     title: title(pageTitle),
     description: 'TODO',
-    menuText: pageTitle,
     node: page,
   },
   '/__url__/add': {
