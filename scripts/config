@@ -1,0 +1,4 @@
+user=node
+host=people-net.cc
+root_dir=/home/node/workspace/github.com/beenotung/people-net
+pm2_name="people-net"
