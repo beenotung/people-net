@@ -34,5 +34,5 @@ seedWords({
   // too similar to other concepts, skip them to reduce number of comparison
   theme: 'skip',
   words:
-    'technology, math, signal processing, cost, regulation, emotion, performance, safety, innovation, wireless sensing, maintainability',
+    'technology, math, signal processing, cost, regulation, emotion, performance, safety, innovation, wireless sensing, maintainability, learning, diversity',
 })
