@@ -27,5 +27,12 @@ seedWords({
 seedWords({
   theme: 'startup',
   words:
-    'medical tech, animal tech, sense tech, wireless sensing, signal processing, math, learning, growth, API, interoperability, openness, diversity, monopoly, cheap, popular, feeling, experience, result, ethic, helpful, technology, culture, tradition,  regulation, emotion, animation, style',
+    'medical tech, animal tech, sense tech, wireless sensing, signal processing, math, learning, growth, API, interoperability, openness, diversity, monopoly, cheap, popular, feeling, experience, result, ethic, helpful, technology, culture, tradition, regulation, emotion, animation, style',
+})
+
+seedWords({
+  // too similar to other concepts, skip them to reduce number of comparison
+  theme: 'skip',
+  words:
+    'technology, math, signal processing, cost, regulation, emotion, performance, safety, innovation, wireless sensing, maintainability',
 })

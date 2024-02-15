@@ -65,7 +65,7 @@ class ConceptNotCompared extends Error {
   }
 }
 
-const TopNRate = 0.2
+const TopNRate = 0.1
 
 let benchmarkConcepts = memorize(function benchmark(totalCount: number) {
   let topN = Math.ceil(totalCount * TopNRate)
@@ -73,9 +73,29 @@ let benchmarkConcepts = memorize(function benchmark(totalCount: number) {
   return { totalCount, topN, Sorter, averageCompareCount }
 })
 
+let select_concept_ids = db
+  .prepare(
+    /* sql */ `
+select id
+from concept
+where id not in (
+  select
+    concept.id
+  from concept
+  inner join concept_theme on concept_theme.concept_id = concept.id
+  inner join theme on theme.id = concept_theme.theme_id
+  where theme.name == 'skip'
+)
+order by id asc
+`,
+  )
+  .pluck()
+
 function getUserPreference(user: User) {
   let topConcepts: Concept[] = []
-  let allConcepts = proxy.concept.map(row => row)
+  let allConcepts = (select_concept_ids.all() as number[]).map(
+    id => proxy.concept[id],
+  )
   let benchmarkResult = benchmarkConcepts(allConcepts.length)
   try {
     let sorter = new benchmarkResult.Sorter<Concept>((a, b) => {
@@ -126,13 +146,16 @@ function Main(attrs: {}, context: Context) {
       </p>
     )
   }
-  let totalConceptCount = proxy.concept.length
   let userPreference = getUserPreference(user)
   if (userPreference.type == 'error') {
     return renderError(userPreference.error, context)
   }
   let { benchmarkResult, topConcepts } = userPreference
-  let { topN, averageCompareCount } = benchmarkResult
+  let {
+    topN,
+    averageCompareCount,
+    totalCount: totalConceptCount,
+  } = benchmarkResult
   let votes = count(proxy.concept_compare, { user_id: user.id! })
   let topConceptList = (
     <>
