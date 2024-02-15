@@ -70,7 +70,12 @@ const TopNRate = 0.1
 
 let benchmarkConcepts = memorize(function benchmark(totalCount: number) {
   let topN = Math.ceil(totalCount * TopNRate)
-  let [{ Sorter, averageCompareCount }] = benchmarkSorters({ topN, totalCount })
+  let [{ Sorter, averageCompareCount }] = benchmarkSorters({
+    topN,
+    totalCount,
+    minTimeout: 1000,
+    maxTimeout: 2000,
+  })
   return { totalCount, topN, Sorter, averageCompareCount }
 })
 
