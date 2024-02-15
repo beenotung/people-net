@@ -44,11 +44,6 @@ let page = (
   </>
 )
 
-let items = [
-  { title: 'Android', slug: 'md' },
-  { title: 'iOS', slug: 'ios' },
-]
-
 let select_concept_compare = db
   .prepare(
     /* sql */ `
@@ -70,8 +65,10 @@ class ConceptNotCompared extends Error {
   }
 }
 
+const TopNRate = 0.2
+
 let benchmarkConcepts = memorize(function benchmark(totalCount: number) {
-  let topN = Math.ceil(totalCount * 0.2)
+  let topN = Math.ceil(totalCount * TopNRate)
   let [{ Sorter, averageCompareCount }] = benchmarkSorters({ topN, totalCount })
   return { totalCount, topN, Sorter, averageCompareCount }
 })
@@ -137,6 +134,16 @@ function Main(attrs: {}, context: Context) {
   let { benchmarkResult, topConcepts } = userPreference
   let { topN, averageCompareCount } = benchmarkResult
   let votes = count(proxy.concept_compare, { user_id: user.id! })
+  let topConceptList = (
+    <>
+      <h3>Top Concepts</h3>
+      <ol class="top--list">
+        {mapArray(topConcepts, concept => (
+          <li class="top--concept">{concept.name}</li>
+        ))}
+      </ol>
+    </>
+  )
   switch (userPreference.type) {
     case 'compare':
       return (
@@ -162,13 +169,17 @@ function Main(attrs: {}, context: Context) {
             ranked top {topConcepts.length}/{totalConceptCount} concepts with{' '}
             {votes} votes
           </p>
-          <p>goal: to rank top {topN} concepts</p>
+          <p>
+            goal: to rank top {topN} ({TopNRate * 100}%) concepts
+          </p>
           <p>estimated votes needed: {Math.ceil(averageCompareCount)}</p>
+          {topConceptList}
         </>
       )
     case 'list':
       return (
         <>
+          {topConceptList}
           <p>
             ranked top {topConcepts.length}/{totalConceptCount} concepts
           </p>
