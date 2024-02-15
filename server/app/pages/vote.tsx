@@ -105,7 +105,7 @@ function getUserPreference(user: User) {
         concept_id_2: b.id,
       }) as number
       if (!id) {
-        throw new ConceptNotCompared([a, b])
+        throw new ConceptNotCompared(Math.random() < 0.5 ? [a, b] : [b, a])
       }
       let row = proxy.concept_compare[id]
       return row.small_id == a.id
