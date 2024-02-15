@@ -164,7 +164,7 @@ function Main(attrs: {}, context: Context) {
     totalCount: totalConceptCount,
   } = benchmarkResult
   let votes = count(proxy.concept_compare, { user_id: user.id! })
-  let topConceptList =
+  let topConceptNode =
     topConcepts.length == 0 ? null : (
       <>
         <h3>Top Concepts</h3>
@@ -175,6 +175,12 @@ function Main(attrs: {}, context: Context) {
         </ol>
       </>
     )
+  let overallProgressNode = (
+    <p>
+      ranked top {topConcepts.length}/{totalConceptCount} concepts with {votes}{' '}
+      votes
+    </p>
+  )
   switch (userPreference.type) {
     case 'compare':
       return (
@@ -197,24 +203,19 @@ function Main(attrs: {}, context: Context) {
           )}
           {undo}
           <h3>Progress</h3>
-          <p>
-            ranked top {topConcepts.length}/{totalConceptCount} concepts with{' '}
-            {votes} votes
-          </p>
+          {overallProgressNode}
           <p>
             goal: to rank top {topN} ({TopNRate * 100}%) concepts
           </p>
           <p>estimated votes needed: {Math.ceil(averageCompareCount)}</p>
-          {topConceptList}
+          {topConceptNode}
         </>
       )
     case 'list':
       return (
         <>
-          {topConceptList}
-          <p>
-            ranked top {topConcepts.length}/{totalConceptCount} concepts
-          </p>
+          {topConceptNode}
+          {overallProgressNode}
           {undo}
         </>
       )
