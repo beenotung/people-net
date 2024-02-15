@@ -14,6 +14,8 @@ import { count, filter, find } from 'better-sqlite3-proxy'
 import { db } from '../../../db/db.js'
 import { toUrl } from '../../url.js'
 import { memorize } from '@beenotung/tslib/memorize.js'
+import { MessageException } from '../helpers.js'
+import { nodeToVNode } from '../jsx/vnode.js'
 
 let pageTitle = 'Vote'
 let addPageTitle = 'Add Vote'
@@ -35,7 +37,9 @@ let page = (
     {style}
     <div id="Vote">
       <h1>{pageTitle}</h1>
-      <Main />
+      <div id="VoteMain">
+        <Main />
+      </div>
     </div>
   </>
 )
@@ -199,6 +203,10 @@ function Submit(attrs: {}, context: DynamicContext) {
       small_id: input.small_id,
       large_id: input.large_id,
     })
+    if (context.type === 'ws') {
+      context.url = '/vote'
+      return page
+    }
     return <Redirect href={`/vote`} />
   } catch (error) {
     return (
