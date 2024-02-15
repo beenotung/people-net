@@ -9,7 +9,7 @@ import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { Concept, User, proxy } from '../../../db/proxy.js'
-import { sortTopN } from 'graph-sort'
+import { sortTopNIter } from 'graph-sort'
 import { count, filter, find } from 'better-sqlite3-proxy'
 import { db } from '../../../db/db.js'
 import { toUrl } from '../../url.js'
@@ -66,8 +66,9 @@ class ConceptNotCompared extends Error {
 }
 
 function getUserPreference(topN: number, user: User) {
+  let topConcepts: Concept[] = []
   try {
-    let topConcepts = sortTopN(
+    let topConceptIter = sortTopNIter(
       (a, b) => {
         let id = select_concept_compare.get({
           user_id: user.id,
@@ -85,15 +86,19 @@ function getUserPreference(topN: number, user: User) {
       topN,
       proxy.concept.map(row => row),
     )
+    for (let concept of topConceptIter) {
+      topConcepts.push(concept)
+    }
     return {
       type: 'list' as const,
-      concepts: topConcepts,
+      topConcepts,
     }
   } catch (error) {
     if (error instanceof ConceptNotCompared) {
       return {
         type: 'compare' as const,
-        concepts: error.concepts,
+        conceptsToCompare: error.concepts,
+        topConcepts,
       }
     }
     return {
@@ -124,7 +129,7 @@ function Main(attrs: {}, context: Context) {
         <>
           <h2>Which concept below do you value more?</h2>
           {mapArray(
-            userPreference.concepts,
+            userPreference.conceptsToCompare,
             (concept, i, concepts) => {
               let url = toUrl('/vote/submit', {
                 small_id: concepts[1 - i].id!,
@@ -138,12 +143,23 @@ function Main(attrs: {}, context: Context) {
             },
             ' vs ',
           )}
+          <h3>Progress</h3>
           <p>
-            progress: ranking top {topN}/{totalConceptCount} with {votes} votes
+            ranked top {userPreference.topConcepts.length}/{totalConceptCount}{' '}
+            concepts with {votes} votes
           </p>
+          <p>goal: to rank top {topN} concepts</p>
         </>
       )
     case 'list':
+      return (
+        <>
+          <p>
+            ranked top {userPreference.topConcepts.length}/{totalConceptCount}{' '}
+            concepts
+          </p>
+        </>
+      )
   }
   return (
     <>
