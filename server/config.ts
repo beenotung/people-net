@@ -57,7 +57,7 @@ export let config = {
   cookie_secret: env.COOKIE_SECRET,
   site_name: 'People Net',
   short_site_name: 'people-net',
-  site_description: 'Network of people',
+  site_description: 'Connect with network of people sharing similar values',
   setup_robots_txt: false,
   epoch,
   auto_open: !production && development && epoch === 1,

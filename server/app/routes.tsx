@@ -74,18 +74,17 @@ export type Routes = Record<string, PageRoute>
 
 // TODO direct support alternative urls instead of having to repeat the entry
 let routeDict: Routes = {
-  ...Vote.routes,
   ...AppNotice.routes,
   ...AppChat.routes,
   ...AppSettings.routes,
   ...AppMore.routes,
   '/': {
     title: title('Home'),
-    description:
-      'Getting Started with ts-liveview - a server-side rendering realtime webapp framework with progressive enhancement',
+    description: config.site_description,
     menuText: 'Home',
     node: Home,
   },
+  ...Vote.routes,
   ...DemoToast.routes,
   '/user-agents': {
     title: title('User Agents of Visitors'),
