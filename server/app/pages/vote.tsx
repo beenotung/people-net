@@ -9,10 +9,11 @@ import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { getAuthUser } from '../auth/user.js'
 import { Concept, User, proxy } from '../../../db/proxy.js'
-import { sortTopNIter } from 'graph-sort'
+import { CompareResult, benchmarkSorters, sortTopNIter } from 'graph-sort'
 import { count, filter, find } from 'better-sqlite3-proxy'
 import { db } from '../../../db/db.js'
 import { toUrl } from '../../url.js'
+import { memorize } from '@beenotung/tslib/memorize.js'
 
 let pageTitle = 'Vote'
 let addPageTitle = 'Add Vote'
@@ -65,33 +66,39 @@ class ConceptNotCompared extends Error {
   }
 }
 
-function getUserPreference(topN: number, user: User) {
+let benchmarkConcepts = memorize(function benchmark(totalCount: number) {
+  let topN = Math.ceil(totalCount * 0.2)
+  let [{ Sorter, averageCompareCount }] = benchmarkSorters({ topN, totalCount })
+  return { totalCount, topN, Sorter, averageCompareCount }
+})
+
+function getUserPreference(user: User) {
   let topConcepts: Concept[] = []
+  let allConcepts = proxy.concept.map(row => row)
+  let benchmarkResult = benchmarkConcepts(allConcepts.length)
   try {
-    let topConceptIter = sortTopNIter(
-      (a, b) => {
-        let id = select_concept_compare.get({
-          user_id: user.id,
-          concept_id_1: a.id,
-          concept_id_2: b.id,
-        }) as number
-        if (!id) {
-          throw new ConceptNotCompared([a, b])
-        }
-        let row = proxy.concept_compare[id]
-        return row.small_id == a.id
-          ? { small: a, large: b }
-          : { small: b, large: a }
-      },
-      topN,
-      proxy.concept.map(row => row),
-    )
-    for (let concept of topConceptIter) {
+    let sorter = new benchmarkResult.Sorter<Concept>((a, b) => {
+      let id = select_concept_compare.get({
+        user_id: user.id,
+        concept_id_1: a.id,
+        concept_id_2: b.id,
+      }) as number
+      if (!id) {
+        throw new ConceptNotCompared([a, b])
+      }
+      let row = proxy.concept_compare[id]
+      return row.small_id == a.id
+        ? { small: a, large: b }
+        : { small: b, large: a }
+    })
+    sorter.addValues(allConcepts)
+    for (let concept of sorter.popTopNIter(benchmarkResult.topN)) {
       topConcepts.push(concept)
     }
     return {
       type: 'list' as const,
       topConcepts,
+      benchmarkResult,
     }
   } catch (error) {
     if (error instanceof ConceptNotCompared) {
@@ -99,6 +106,7 @@ function getUserPreference(topN: number, user: User) {
         type: 'compare' as const,
         conceptsToCompare: error.concepts,
         topConcepts,
+        benchmarkResult,
       }
     }
     return {
@@ -118,12 +126,14 @@ function Main(attrs: {}, context: Context) {
     )
   }
   let totalConceptCount = proxy.concept.length
-  let topN = Math.ceil(totalConceptCount * 0.2)
-  let userPreference = getUserPreference(topN, user)
+  let userPreference = getUserPreference(user)
+  if (userPreference.type == 'error') {
+    return renderError(userPreference.error, context)
+  }
+  let { benchmarkResult, topConcepts } = userPreference
+  let { topN, averageCompareCount } = benchmarkResult
   let votes = count(proxy.concept_compare, { user_id: user.id! })
   switch (userPreference.type) {
-    case 'error':
-      return renderError(userPreference.error, context)
     case 'compare':
       return (
         <>
@@ -145,42 +155,31 @@ function Main(attrs: {}, context: Context) {
           )}
           <h3>Progress</h3>
           <p>
-            ranked top {userPreference.topConcepts.length}/{totalConceptCount}{' '}
-            concepts with {votes} votes
+            ranked top {topConcepts.length}/{totalConceptCount} concepts with{' '}
+            {votes} votes
           </p>
           <p>goal: to rank top {topN} concepts</p>
+          <p>estimated votes needed: {Math.ceil(averageCompareCount)}</p>
         </>
       )
     case 'list':
       return (
         <>
           <p>
-            ranked top {userPreference.topConcepts.length}/{totalConceptCount}{' '}
-            concepts
+            ranked top {topConcepts.length}/{totalConceptCount} concepts
           </p>
         </>
       )
+    default:
+      return (
+        <>
+          {renderError(
+            'unknown type: ' + (userPreference satisfies never as any).type,
+            context,
+          )}
+        </>
+      )
   }
-  return (
-    <>
-      <ul>
-        {mapArray(items, item => (
-          <li>
-            {item.title} ({item.slug})
-          </li>
-        ))}
-      </ul>
-      {user ? (
-        <Link href="/vote/add">
-          <button>{addPageTitle}</button>
-        </Link>
-      ) : (
-        <p>
-          You can add vote after <Link href="/register">register</Link>.
-        </p>
-      )}
-    </>
-  )
 }
 
 let submitParser = object({
