@@ -11,11 +11,12 @@ import { getAuthUser } from '../auth/user.js'
 import { Concept, User, proxy } from '../../../db/proxy.js'
 import { CompareResult, benchmarkSorters, sortTopNIter } from 'graph-sort'
 import { count, filter, find } from 'better-sqlite3-proxy'
-import { db } from '../../../db/db.js'
+import { db, dbFile } from '../../../db/db.js'
 import { toUrl } from '../../url.js'
 import { memorize } from '@beenotung/tslib/memorize.js'
 import { MessageException } from '../helpers.js'
 import { nodeToVNode } from '../jsx/vnode.js'
+import { HttpError } from '../../http-error.js'
 
 let pageTitle = 'Vote'
 let addPageTitle = 'Add Vote'
@@ -137,6 +138,12 @@ function getUserPreference(user: User) {
   }
 }
 
+let undo = (
+  <div style="margin-top: 1rem">
+    <button onclick="emit('/vote/undo')">undo last vote</button>
+  </div>
+)
+
 function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
   if (!user) {
@@ -157,16 +164,17 @@ function Main(attrs: {}, context: Context) {
     totalCount: totalConceptCount,
   } = benchmarkResult
   let votes = count(proxy.concept_compare, { user_id: user.id! })
-  let topConceptList = (
-    <>
-      <h3>Top Concepts</h3>
-      <ol class="top--list">
-        {mapArray(topConcepts, concept => (
-          <li class="top--concept">{concept.name}</li>
-        ))}
-      </ol>
-    </>
-  )
+  let topConceptList =
+    topConcepts.length == 0 ? null : (
+      <>
+        <h3>Top Concepts</h3>
+        <ol class="top--list">
+          {mapArray(topConcepts, concept => (
+            <li class="top--concept">{concept.name}</li>
+          ))}
+        </ol>
+      </>
+    )
   switch (userPreference.type) {
     case 'compare':
       return (
@@ -187,6 +195,7 @@ function Main(attrs: {}, context: Context) {
             },
             ' vs ',
           )}
+          {undo}
           <h3>Progress</h3>
           <p>
             ranked top {topConcepts.length}/{totalConceptCount} concepts with{' '}
@@ -206,6 +215,7 @@ function Main(attrs: {}, context: Context) {
           <p>
             ranked top {topConcepts.length}/{totalConceptCount} concepts
           </p>
+          {undo}
         </>
       )
     default:
@@ -228,7 +238,8 @@ let submitParser = object({
 function Submit(attrs: {}, context: DynamicContext) {
   try {
     let user = getAuthUser(context)
-    if (!user) throw 'You must be logged in to submit ' + pageTitle
+    if (!user)
+      throw new HttpError(401, 'You must be logged in to submit ' + pageTitle)
     let input = submitParser.parse(
       Object.fromEntries(new URLSearchParams(context.routerMatch?.search)),
     )
@@ -257,6 +268,39 @@ function SubmitResult(attrs: {}, context: DynamicContext) {
   return <div>{renderError(error, context)}</div>
 }
 
+let delete_last_vote = db.prepare(/* sql */ `
+delete from concept_compare
+where id in (
+  select id from concept_compare
+  where user_id = :user_id
+  order by id desc
+  limit 1
+)
+`)
+
+function Undo(attrs: {}, context: DynamicContext) {
+  try {
+    let user = getAuthUser(context)
+    if (!user)
+      throw new HttpError(
+        401,
+        'You must be logged in to undo last ' + pageTitle,
+      )
+    delete_last_vote.run({ user_id: user.id })
+    if (context.type === 'ws') {
+      context.url = '/vote'
+      return page
+    }
+    return <Redirect href={`/vote`} />
+  } catch (error) {
+    return (
+      <Redirect
+        href={'/vote/result?' + new URLSearchParams({ error: String(error) })}
+      />
+    )
+  }
+}
+
 let routes: Routes = {
   '/vote': {
     title: title(pageTitle),
@@ -274,6 +318,12 @@ let routes: Routes = {
     title: apiEndpointTitle,
     description: 'error page of vote submission',
     node: <SubmitResult />,
+    streaming: false,
+  },
+  '/vote/undo': {
+    title: apiEndpointTitle,
+    description: 'undo last vote',
+    node: <Undo />,
     streaming: false,
   },
 }
