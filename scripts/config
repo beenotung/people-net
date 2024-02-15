@@ -1,4 +1,4 @@
 user=node
-host=people-net.cc
+host=people.hkit.cc
 root_dir=/home/node/workspace/github.com/beenotung/people-net
 pm2_name="people-net"

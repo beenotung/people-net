@@ -129,6 +129,9 @@ export function UserMessageInGuestView(attrs: { user_id: number }) {
         You have login as <b>{user.username || user.email}</b>.
       </p>
       <p>
+        You can start to <Link href="/vote">vote on your values</Link>.
+      </p>
+      <p hidden>
         You can go to <Link href="/profile">profile page</Link> to manage your
         public profile and exclusive content.
       </p>

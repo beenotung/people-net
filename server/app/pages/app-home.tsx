@@ -94,7 +94,7 @@ let routes: Routes = {
     title: title(pageTitle),
     description:
       'List of fictional characters commonly used as placeholders in discussion about cryptographic systems and protocols.',
-    menuText: 'Ionic App',
+    // menuText: 'Ionic App',
     menuFullNavigate: true,
     node: homePage,
     layout_type: LayoutType.ionic,
