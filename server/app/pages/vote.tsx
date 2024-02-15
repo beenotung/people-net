@@ -143,7 +143,7 @@ function getUserPreference(user: User) {
   }
 }
 
-let undo = (
+let undoNode = (
   <div style="margin-top: 1rem">
     <button onclick="emit('/vote/undo')">undo last vote</button>
   </div>
@@ -206,7 +206,7 @@ function Main(attrs: {}, context: Context) {
             },
             ' vs ',
           )}
-          {undo}
+          {votes > 0 ? undoNode : null}
           <h3>Progress</h3>
           {overallProgressNode}
           <p>
@@ -221,7 +221,7 @@ function Main(attrs: {}, context: Context) {
         <>
           {topConceptNode}
           {overallProgressNode}
-          {undo}
+          {votes > 0 ? undoNode : null}
         </>
       )
     default:
