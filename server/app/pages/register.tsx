@@ -108,7 +108,7 @@ function Main(_attrs: {}, context: Context) {
   return user_id ? <UserMessageInGuestView user_id={user_id} /> : guestView
 }
 
-let useSocialLogin = true
+let useSocialLogin = false
 
 let emailFormBody = (
   <>
