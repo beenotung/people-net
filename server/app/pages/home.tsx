@@ -25,6 +25,9 @@ let content = (
               <Link href="/vote">vote</Link>
             </li>
             <li>
+              <Link href="/people">explore</Link>
+            </li>
+            <li hidden>
               <Link href="/match">match</Link>
             </li>
           </ul>

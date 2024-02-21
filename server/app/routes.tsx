@@ -1,3 +1,4 @@
+import People from './pages/people.js'
 import Vote from './pages/vote.js'
 import AppNotice from './pages/app-notice.js'
 import AppChat from './pages/app-chat.js'
@@ -84,6 +85,7 @@ let routeDict: Routes = {
     menuText: 'Home',
     node: Home,
   },
+  ...People.routes,
   ...Vote.routes,
   ...DemoToast.routes,
   '/user-agents': {

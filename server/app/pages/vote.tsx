@@ -94,7 +94,7 @@ order by id asc
   )
   .pluck()
 
-function getUserPreference(user: User) {
+export function getUserPreference(user: User) {
   let topConcepts: Concept[] = []
   let allConcepts = (select_concept_ids.all() as number[]).map(
     id => proxy.concept[id],
