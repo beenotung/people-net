@@ -1,7 +1,7 @@
 import { object, Parser, string } from 'cast.ts'
 import { apiEndpointTitle } from '../../config.js'
 import { DynamicContext, getContextFormBody } from '../context.js'
-import { EarlyTerminate } from '../helpers.js'
+import { EarlyTerminate } from '../../exception.js'
 import { o } from '../jsx/jsx.js'
 import { Node } from '../jsx/types.js'
 import { Routes } from '../routes.js'
@@ -30,7 +30,6 @@ export function newSingleFieldForm<
   label: string // full, for view & edit
   name?: Name
   placeholder?: string
-  autocomplete?: boolean // default: off
   oninput?: string
   onchange?: string
   submitButton?: string | false // default: Save, pass false to skip the button
@@ -56,7 +55,6 @@ export function newSingleFieldForm<
   } = attrs
   let method = attrs.method || 'POST'
   let name = attrs.name || 'input'
-  let autocomplete = attrs.autocomplete === true ? undefined : 'off'
   let submitButton = attrs.submitButton ?? 'Save'
   let updateParser: Parser<Input> =
     attrs.updateParser ||
@@ -78,6 +76,8 @@ export function newSingleFieldForm<
   function Form(attrs: {
     value: FieldValue
     type?: string
+    /** @description default: off */
+    autocomplete?: false | string
     extraFields?: Node
     class?: string
     formId?: string
@@ -86,6 +86,10 @@ export function newSingleFieldForm<
     key?: string | number
   }) {
     let { value, type, extraFields, key } = attrs
+    let autocomplete =
+      attrs.autocomplete === false || attrs.autocomplete === undefined
+        ? 'off'
+        : attrs.autocomplete
     let isKeyed = updateKeyField && key != undefined
     let updateMessageId = isKeyed
       ? `${defaultUpdateMessageId}-${key}`
@@ -155,13 +159,13 @@ export function newSingleFieldForm<
     return renderUpdate({ input }, context)
   }
 
-  let routes: Routes = {
+  let routes = {
     [action]: {
       title: apiEndpointTitle,
       description,
       node: <Update />,
     },
-  }
+  } satisfies Routes
 
   return { Form, Update, routes }
 }

@@ -1,14 +1,19 @@
 import Swal, {
   SweetAlertIcon,
   SweetAlertOptions,
+  SweetAlertPosition,
 } from 'sweetalert2-unrestricted'
 
-function showToast(title: SweetAlertOptions['title'], icon: SweetAlertIcon) {
+function showToast(
+  title: SweetAlertOptions['title'],
+  icon: SweetAlertIcon,
+  position: SweetAlertPosition = 'top-end',
+) {
   const Toast = Swal.mixin({
     toast: true,
-    position: 'top-end',
+    position,
     showConfirmButton: false,
-    timer: 3000,
+    timer: 3800,
     timerProgressBar: true,
     didOpen: toast => {
       toast.onmouseenter = Swal.stopTimer
@@ -29,8 +34,29 @@ function showAlert(title: SweetAlertOptions['title'], icon: SweetAlertIcon) {
   })
 }
 
+async function showConfirm(options: {
+  title: SweetAlertOptions['title']
+  text?: SweetAlertOptions['text']
+  icon?: SweetAlertIcon
+  confirmButtonText?: string
+  cancelButtonText?: string
+}) {
+  let result = await Swal.fire({
+    title: options.title,
+    text: options.text,
+    icon: options.icon,
+    showConfirmButton: true,
+    showCancelButton: true,
+    heightAuto: false,
+    confirmButtonText: options.confirmButtonText || 'Confirm',
+    cancelButtonText: options.cancelButtonText || 'Cancel',
+  })
+  return result.isConfirmed
+}
+
 Object.assign(window, {
   Swal,
   showToast,
   showAlert,
+  showConfirm,
 })

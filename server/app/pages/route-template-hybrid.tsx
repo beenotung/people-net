@@ -2,7 +2,12 @@ import { o } from '../jsx/jsx.js'
 import { Routes } from '../routes.js'
 import { apiEndpointTitle, title } from '../../config.js'
 import Style from '../components/style.js'
-import { Context, DynamicContext, getContextFormBody } from '../context.js'
+import {
+  Context,
+  DynamicContext,
+  getContextFormBody,
+  throwIfInAPI,
+} from '../context.js'
 import { mapArray } from '../components/fragment.js'
 import { IonBackButton } from '../components/ion-back-button.js'
 import { LayoutType, config } from '../../config.js'
@@ -144,6 +149,7 @@ let addPage = (
         <br />
         *: mandatory fields
       </p>
+      <p id="add-message"></p>
     </form>
   </div>
 )
@@ -203,6 +209,7 @@ if (config.layout_type === LayoutType.ionic) {
             <br />
             *: mandatory fields
           </p>
+          <p id="add-message"></p>
         </form>
       </ion-content>
     </>
@@ -231,6 +238,7 @@ function Submit(attrs: {}, context: DynamicContext) {
     })
     return <Redirect href={`/__url__/result?id=${id}`} />
   } catch (error) {
+    throwIfInAPI(error, '#add-message', context)
     return (
       <Redirect
         href={
@@ -287,7 +295,7 @@ function SubmitResult(attrs: {}, context: DynamicContext) {
   )
 }
 
-let routes: Routes = {
+let routes = {
   '/__url__': {
     title: title(pageTitle),
     description: 'TODO',
@@ -312,6 +320,6 @@ let routes: Routes = {
     node: <SubmitResult />,
     streaming: false,
   },
-}
+} satisfies Routes
 
 export default { routes }

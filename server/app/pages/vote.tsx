@@ -14,7 +14,7 @@ import { count } from 'better-sqlite3-proxy'
 import { db } from '../../../db/db.js'
 import { toUrl } from '../../url.js'
 import { memorize } from '@beenotung/tslib/memorize.js'
-import { HttpError } from '../../http-error.js'
+import { HttpError } from '../../exception.js'
 
 let pageTitle = 'Vote'
 
@@ -192,8 +192,10 @@ function Main(attrs: {}, context: Context) {
             userPreference.conceptsToCompare,
             (concept, i, concepts) => {
               let url = toUrl('/vote/submit', {
-                small_id: concepts[1 - i].id!,
-                large_id: concept.id!,
+                query: {
+                  small_id: concepts[1 - i].id!,
+                  large_id: concept.id!,
+                },
               })
               return (
                 <button class="compare--concept" onclick={`emit('${url}')`}>

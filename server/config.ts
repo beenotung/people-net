@@ -52,27 +52,16 @@ export enum LayoutType {
 export let config = {
   production,
   development,
-  port: env.PORT,
-  origin: env.ORIGIN,
-  cookie_secret: env.COOKIE_SECRET,
+  minify: production,
   site_name: 'People Net',
   short_site_name: 'people-net',
   site_description: 'Connect with network of people sharing similar values',
   setup_robots_txt: false,
   epoch,
   auto_open: !production && development && epoch === 1,
-  upload_dir: env.UPLOAD_DIR,
   client_target: 'es2020',
   layout_type: LayoutType.navbar,
-  email: {
-    service: env.EMAIL_SERVICE,
-    host: env.EMAIL_HOST,
-    port: env.EMAIL_PORT,
-    auth: {
-      user: env.EMAIL_USER,
-      pass: env.EMAIL_PASSWORD,
-    },
-  },
+  use_social_login: false,
 }
 
 const titleSuffix = ' | ' + config.site_name

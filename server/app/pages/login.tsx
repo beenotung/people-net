@@ -1,20 +1,25 @@
 import { LayoutType, apiEndpointTitle, config, title } from '../../config.js'
 import { commonTemplatePageText } from '../components/common-template.js'
 import { Link, Redirect } from '../components/router.js'
-import { Context, DynamicContext, ExpressContext } from '../context.js'
+import {
+  Context,
+  DynamicContext,
+  ExpressContext,
+  getContextFormBody,
+  getStringCasual,
+} from '../context.js'
 import { o } from '../jsx/jsx.js'
 import { Routes, StaticPageRoute } from '../routes.js'
-import { getContextFormBody } from '../context.js'
 import { renderError } from '../components/error.js'
 import { proxy } from '../../../db/proxy.js'
 import { find } from 'better-sqlite3-proxy'
-import { getStringCasual } from '../helpers.js'
 import { comparePassword } from '../../hash.js'
 import { UserMessageInGuestView } from './profile.js'
 import { getAuthUserId, writeUserIdToCookie } from '../auth/user.js'
 import Style from '../components/style.js'
 import { IonBackButton } from '../components/ion-back-button.js'
 import { wsStatus } from '../components/ws-status.js'
+import { to_full_hk_mobile_phone } from '@beenotung/tslib/validate.js'
 
 let style = Style(/* css */ `
 #login .field {
@@ -58,14 +63,30 @@ function Main(_attrs: {}, context: Context) {
   return user_id ? <UserMessageInGuestView user_id={user_id} /> : guestView
 }
 
-let emailFormBody =
+let verifyFormBody =
   config.layout_type !== LayoutType.ionic ? (
     <>
       <div class="field">
         <label>
-          Email
+          Email or phone number
           <div class="input-container">
-            <input name="email" type="email" autocomplete="email" />
+            <input
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="Email"
+              required
+              onchange="this.form.tel.required = !this.value"
+            />
+            <div>or</div>
+            <input
+              name="tel"
+              type="tel"
+              autocomplete="tel"
+              placeholder="Phone number"
+              required
+              onchange="this.form.email.required = !this.value"
+            />
           </div>
         </label>
       </div>
@@ -87,6 +108,20 @@ let emailFormBody =
             type="email"
             name="email"
             autocomplete="email"
+            required
+            onchange="verifyForm.tel.required = !this.value"
+          ></ion-input>
+        </ion-item>
+        <p style="margin-bottom: 0; margin-left: 1rem">or</p>
+        <ion-item>
+          <ion-input
+            label="Phone number"
+            label-placement="floating"
+            type="tel"
+            name="tel"
+            autocomplete="tel"
+            required
+            onchange="verifyForm.email.required = !this.value"
           ></ion-input>
         </ion-item>
         <ion-item>
@@ -111,7 +146,7 @@ let passwordFormBody =
   config.layout_type !== LayoutType.ionic ? (
     <>
       <label>
-        Username or email address
+        Username, email or phone number
         <div class="input-container">
           <input name="loginId" autocomplete="username" />
         </div>
@@ -136,7 +171,7 @@ let passwordFormBody =
       <ion-list>
         <ion-item>
           <ion-input
-            label="Username or email address"
+            label="Username, email or phone number"
             label-placement="floating"
             name="loginId"
             autocomplete="username"
@@ -165,11 +200,12 @@ let guestView = (
   <>
     <div>Login with:</div>
     <form
+      id="verifyForm"
       method="POST"
-      action="/verify/email/submit"
-      // onsubmit="emitForm(event)"
+      action="/verify/submit"
+      onsubmit="emitForm(event)"
     >
-      {emailFormBody}
+      {verifyFormBody}
     </form>
     <div class="or-line flex-center">or</div>
     <form method="post" action="/login/submit">
@@ -184,8 +220,11 @@ let guestView = (
 
 let codes: Record<string, string> = {
   not_found: 'user not found',
-  no_pw: 'password is not set, did you use social login?',
-  wrong: 'wrong username, email or password',
+  no_pw: config.use_social_login
+    ? 'password is not set, did you use email/sms verification or social login?'
+    : 'password is not set, did you use email/sms verification?',
+  wrong_email: 'wrong email or password',
+  wrong_id: 'wrong username, phone number or password',
   ok: 'login successfully',
 }
 
@@ -195,15 +234,24 @@ function Message(_attrs: {}, context: DynamicContext) {
   return <p class="error">{codes[code] || code}</p>
 }
 
+function findUser(loginId: string) {
+  if (loginId.includes('@')) {
+    return find(proxy.user, { email: loginId })
+  }
+  let tel = to_full_hk_mobile_phone(loginId)
+  return (
+    (tel ? find(proxy.user, { tel }) : null) ||
+    find(proxy.user, { username: loginId })
+  )
+}
+
 async function submit(context: ExpressContext) {
   try {
     let body = getContextFormBody(context) || {}
     let loginId = getStringCasual(body, 'loginId')
     let password = getStringCasual(body, 'password')
-    let user = find(
-      proxy.user,
-      loginId.includes('@') ? { email: loginId } : { username: loginId },
-    )
+    let user = findUser(loginId)
+
     if (!user || !user.id) {
       return <Redirect href="/login?code=not_found" />
     }
@@ -219,7 +267,11 @@ async function submit(context: ExpressContext) {
     })
 
     if (!matched) {
-      return <Redirect href="/login?code=wrong" />
+      return loginId.includes('@') ? (
+        <Redirect href="/login?code=wrong_email" />
+      ) : (
+        <Redirect href="/login?code=wrong_id" />
+      )
     }
 
     writeUserIdToCookie(context.res, user.id)
@@ -235,7 +287,7 @@ async function submit(context: ExpressContext) {
   }
 }
 
-let routes: Routes = {
+let routes = {
   '/login': {
     title: title('Login'),
     description: `Login to access exclusive content and functionality. Welcome back to our community on ${config.short_site_name}.`,
@@ -254,6 +306,6 @@ let routes: Routes = {
       }
     },
   },
-}
+} satisfies Routes
 
 export default { routes }

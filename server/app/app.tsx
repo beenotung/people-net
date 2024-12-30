@@ -12,11 +12,10 @@ import {
 import { sendHTMLHeader } from './express.js'
 import { OnWsMessage } from '../ws/wss.js'
 import { dispatchUpdate } from './jsx/dispatch.js'
-import { EarlyTerminate, MessageException } from './helpers.js'
+import { EarlyTerminate, MessageException } from '../exception.js'
 import { getWSSession } from './session.js'
 import { Flush } from './components/flush.js'
 import { LayoutType, config } from '../config.js'
-import Stats from './stats.js'
 import { MuteConsole, Script } from './components/script.js'
 import {
   matchRoute,
@@ -33,14 +32,15 @@ import { renderIonicTemplate } from '../../template/ionic.js'
 import { HTMLStream } from './jsx/stream.js'
 import { renewAuthCookieMiddleware } from './auth/user.js'
 import { getWsCookies } from './cookie.js'
-import { PickLanguage } from './components/ui-language.js'
 import Navbar from './components/navbar.js'
 import Sidebar from './components/sidebar.js'
 import Profile from './pages/profile.js'
 import { logRequest } from './log.js'
 import { WindowStub } from '../../client/internal.js'
 import { updateRequestSession } from '../../db/request-log.js'
+import { Link } from './components/router.js'
 import verificationCode from './pages/verification-code.js'
+import Stats from './components/stats.js'
 
 if (config.development) {
   scanTemplateDir('template')
@@ -178,7 +178,12 @@ function Footer(attrs: { style?: string }) {
         (attrs.style || '')
       }
     >
-      <PickLanguage style="text-align: end" />
+      <div style="margin-bottom: 0.75rem">
+        Made with 💝 by{' '}
+        <a target="_blank" href="https://github.com/beenotung">
+          Beeno
+        </a>
+      </div>
       <Stats />
     </footer>
   )
@@ -199,7 +204,7 @@ export function attachRoutes(app: Router) {
   app.use(handleLiveView)
 }
 
-function handleLiveView(req: Request, res: Response, next: NextFunction) {
+async function handleLiveView(req: Request, res: Response, next: NextFunction) {
   sendHTMLHeader(res)
 
   let context: ExpressContext = {
@@ -210,19 +215,39 @@ function handleLiveView(req: Request, res: Response, next: NextFunction) {
     url: req.url,
   }
 
-  then(matchRoute(context), route => {
-    if (route.status) {
-      res.status(route.status)
-    }
+  try {
+    await then(
+      matchRoute(context),
+      route => {
+        if (route.status) {
+          res.status(route.status)
+        }
 
-    route.description = route.description.replace(/"/g, "'")
+        route.description = route.description.replace(/"/g, "'")
 
-    if (route.streaming === false) {
-      responseHTML(res, context, route)
-    } else {
-      streamHTML(res, context, route)
+        if (route.streaming === false) {
+          responseHTML(res, context, route)
+        } else {
+          streamHTML(res, context, route)
+        }
+      },
+      onError,
+    )
+  } catch (error) {
+    onError(error)
+  }
+  function onError(error: unknown) {
+    if (error == EarlyTerminate) {
+      return
     }
-  })
+    if (error instanceof MessageException) {
+      res.json({ message: error.message })
+      return
+    }
+    res.status(500)
+    res.json({ error: String(error) })
+    console.error(error)
+  }
 }
 
 function responseHTML(

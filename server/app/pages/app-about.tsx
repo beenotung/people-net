@@ -2,7 +2,7 @@ import { LayoutType, title } from '../../config.js'
 import { mapArray } from '../components/fragment.js'
 import { IonBackButton } from '../components/ion-back-button.js'
 import { wsStatus } from '../components/ws-status.js'
-import { Context, DynamicContext } from '../context.js'
+import { DynamicContext } from '../context.js'
 import { o } from '../jsx/jsx.js'
 import { Routes } from '../routes.js'
 import { themeColorNames } from '../styles/mobile-style.js'
@@ -78,13 +78,13 @@ let aboutPage = (
   </>
 )
 
-let routes: Routes = {
+let routes = {
   '/app/about': {
     title: title(pageTitle),
     description: `Demo using ionic and ts-liveview to build mobile-first SSR webapp`,
     node: aboutPage,
     layout_type: LayoutType.ionic,
   },
-}
+} satisfies Routes
 
 export default { routes }

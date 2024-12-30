@@ -8,6 +8,10 @@ import {
   updateProps,
   updateText,
   setValue,
+  insertNodeBefore,
+  redirect,
+  addClass,
+  removeClass,
 } from './jsx/dom.js'
 import { connectWS } from './ws/ws-lite.js'
 import type { LinkFlag, WindowStub } from './internal'
@@ -31,6 +35,11 @@ connectWS({
     function emit(...args: unknown[]): void
     function emit(): void {
       ws.send(Array.from(arguments) as ClientMessage)
+    }
+
+    function goto(url: string): void {
+      history.pushState(null, document.title, url)
+      emit(url)
     }
 
     function emitHref(event: MouseEvent, flag?: LinkFlag) {
@@ -65,6 +74,17 @@ connectWS({
 
     function submitForm(form: HTMLFormElement) {
       let formData = new FormData(form)
+      if (form.dataset.trimEmpty) {
+        let keys: string[] = []
+        formData.forEach((value, key) => {
+          if (value == '') {
+            keys.push(key)
+          }
+        })
+        for (let key of keys) {
+          formData.delete(key)
+        }
+      }
       if (form.method === 'get') {
         let url = new URL(form.action || location.href)
         url.search = new URLSearchParams(formData as {}).toString()
@@ -96,6 +116,7 @@ connectWS({
     }
 
     win.emit = emit
+    win.goto = goto
     win.emitHref = emitHref
     win.emitForm = emitForm
     win.submitForm = submitForm
@@ -160,6 +181,9 @@ function onServerMessage(message: ServerMessage) {
     case 'append':
       appendNode(message[1], message[2])
       break
+    case 'insert-before':
+      insertNodeBefore(message[1], message[2])
+      break
     case 'remove':
       removeNode(message[1])
       break
@@ -178,6 +202,12 @@ function onServerMessage(message: ServerMessage) {
     case 'set-value':
       setValue(message[1], message[2])
       break
+    case 'add-class':
+      addClass(message[1], message[2])
+      break
+    case 'remove-class':
+      removeClass(message[1], message[2])
+      break
     case 'batch':
       message[1].forEach(onServerMessage)
       break
@@ -188,15 +218,18 @@ function onServerMessage(message: ServerMessage) {
       document.title = message[1]
       break
     case 'redirect':
-      location.href = message[1]
+      redirect(message[1], message[2])
       break
     case 'eval':
       eval(message[1])
       break
-    default:
-      console.error('unknown server message:', message)
+    default: {
+      let rest: never = message
+      console.error('unknown server message:', rest)
+    }
   }
 }
+win.onServerMessage = onServerMessage
 
 function get(url: string) {
   return fetch(url)
@@ -208,13 +241,49 @@ function del(url: string) {
 }
 win.del = del
 
-function upload(event: Event) {
+function uploadForm(event: Event) {
   let form = event.target as HTMLFormElement
-  let result = fetch(form.action, {
-    method: 'POST',
-    body: new FormData(form),
-  })
+  let result = upload(form.action, new FormData(form))
   event.preventDefault()
   return result
 }
+win.uploadForm = uploadForm
+
+function upload(url: string, formData: FormData) {
+  return fetch(url, {
+    method: 'POST',
+    body: formData,
+  })
+}
 win.upload = upload
+
+win.fetch_json = (input, init) => {
+  return fetch(input, init)
+    .then(res =>
+      res.json().catch(() => ({
+        error: res.statusText || `Status Code: ${res.status}`,
+      })),
+    )
+    .catch(res => ({ error: String(res) }))
+    .then(json => {
+      if (json.error) {
+        showError(json.error)
+      }
+      if (json.message) {
+        onServerMessage(json.message)
+      }
+      return json
+    })
+}
+
+// in sweetalert client plugin
+declare function showAlert(title: string, icon: string): void
+
+function showError(error: unknown) {
+  if (typeof showAlert === 'function') {
+    showAlert(String(error), 'error')
+  } else {
+    alert(String(error))
+  }
+}
+win.showError = showError

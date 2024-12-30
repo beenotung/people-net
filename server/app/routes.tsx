@@ -8,7 +8,9 @@ import { capitalize } from '@beenotung/tslib/string.js'
 import { Router } from 'url-router.ts'
 import { LayoutType, config, title } from '../config.js'
 import { Redirect } from './components/router.js'
-import type { DynamicContext } from './context'
+import UILanguage from './components/ui-language.js'
+import type express from 'express'
+import type { Context, DynamicContext, ExpressContext } from './context'
 import { o } from './jsx/jsx.js'
 import type { Node } from './jsx/types'
 import UserAgents from './pages/user-agents.js'
@@ -20,12 +22,16 @@ import Register from './pages/register.js'
 import Profile from './pages/profile.js'
 import VerificationCode from './pages/verification-code.js'
 import type { MenuRoute } from './components/menu'
-import DemoToast from './pages/demo-toast.js'
-import appHome from './pages/app-home.js'
-import appAbout from './pages/app-about.js'
-import appCharacter from './pages/app-character.js'
+import DemoPlugin from './pages/demo-plugin.js'
+import AppHome from './pages/app-home.js'
+import AppAbout from './pages/app-about.js'
+import AppCharacter from './pages/app-character.js'
 import type { renderWebTemplate } from '../../template/web.js'
 import type { renderIonicTemplate } from '../../template/ionic.js'
+import { VNode } from '../../client/jsx/types.js'
+import { EarlyTerminate, MessageException } from '../exception.js'
+import { renderError } from './components/error.js'
+import { evalAttrsLocale, Locale } from './components/locale.js'
 
 let titles: Record<string, string> = {}
 
@@ -55,15 +61,15 @@ export type PageRouteOptions = {
 
 export type StaticPageRoute = {
   title: string
-  node: Node
+  node: Node | VNode
   description: string
   status?: number
 } & RenderOptions
 
 export type DynamicPageRoute = {
-  resolve: (context: DynamicContext) => ResolvedPageRoue
+  resolve: (context: DynamicContext) => ResolvedPageRoute
 }
-export type ResolvedPageRoue = StaticPageRoute | Promise<StaticPageRoute>
+export type ResolvedPageRoute = StaticPageRoute | Promise<StaticPageRoute>
 
 export type PageRouteMatch = PageRouteOptions & StaticPageRoute
 
@@ -74,34 +80,25 @@ export type Routes = Record<string, PageRoute>
 // or invoke functional component with x-html tag, e.g. `<Editor/>
 
 // TODO direct support alternative urls instead of having to repeat the entry
-let routeDict: Routes = {
-  ...AppNotice.routes,
-  ...AppChat.routes,
-  ...AppSettings.routes,
-  ...AppMore.routes,
-  '/': {
-    title: title('Home'),
-    description: config.site_description,
-    menuText: 'Home',
-    node: Home,
-  },
+let routeDict = {
+  ...Home.routes,
   ...People.routes,
   ...Vote.routes,
-  ...DemoToast.routes,
-  '/user-agents': {
-    title: title('User Agents of Visitors'),
-    description: "User agents of this site's visitors",
-    menuText: 'User Agents',
-    node: UserAgents,
-  },
+  ...DemoPlugin.routes,
+  ...UILanguage.routes,
+  ...UserAgents.routes,
   ...Login.routes,
   ...Register.routes,
   ...Profile.routes,
   ...VerificationCode.routes,
-  ...appHome.routes,
-  ...appCharacter.routes,
-  ...appAbout.routes,
-}
+  ...AppHome.routes,
+  ...AppCharacter.routes,
+  ...AppAbout.routes,
+  ...AppChat.routes,
+  ...AppNotice.routes,
+  ...AppMore.routes,
+  ...AppSettings.routes,
+} satisfies Routes
 
 export let redirectDict: Record<string, string> = {
   '/server/app/pages/home.tsx': '/',
@@ -111,7 +108,7 @@ export const pageRouter = new Router<PageRoute>()
 
 export const menuRoutes: MenuRoute[] = []
 
-Object.entries(routeDict).forEach(([url, route]) => {
+Object.entries(routeDict as Routes).forEach(([url, route]) => {
   pageRouter.add(url, { url, ...route })
   if (route.menuText) {
     menuRoutes.push({
@@ -145,15 +142,55 @@ export function matchRoute(
   }
   context.routerMatch = match
   if ('resolve' in route) {
-    return then(route.resolve(context), res => Object.assign(route, res))
+    return then(route.resolve(context), res => {
+      let resolved = Object.assign(route, res)
+      evalAttrsLocale(resolved, 'title', context)
+      evalAttrsLocale(resolved, 'description', context)
+      return resolved
+    })
   }
+  evalAttrsLocale(route, 'title', context)
+  evalAttrsLocale(route, 'description', context)
   return route
 }
 
-export function getContextSearchParams(context: DynamicContext) {
-  return new URLSearchParams(
-    context.routerMatch?.search || context.url.split('?').pop(),
-  )
+export function resolveExpressContext(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  let context: ExpressContext = {
+    type: 'express',
+    req,
+    res,
+    next,
+    url: req.url,
+    routerMatch: pageRouter.route(req.url),
+  }
+  return context
+}
+
+export function errorRoute(
+  error: unknown,
+  context: Context,
+  title: string,
+  description: string,
+): StaticPageRoute {
+  if (error == EarlyTerminate || error instanceof MessageException) {
+    throw error
+  }
+  if (context.type == 'ws' && typeof error == 'string') {
+    throw new MessageException([
+      'eval',
+      // `showToast(${JSON.stringify(error)},'error')`,
+      `showAlert(${JSON.stringify(error)},'error')`,
+    ])
+  }
+  return {
+    title,
+    description,
+    node: renderError(error, context),
+  }
 }
 
 if (config.setup_robots_txt) {

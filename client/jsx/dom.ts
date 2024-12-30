@@ -15,11 +15,14 @@ const origin = location.origin
 function findAndApplyRedirect(root: ParentNode) {
   root.querySelectorAll('a[data-live=redirect]').forEach(e => {
     let a = e as HTMLAnchorElement
-    let title = a.title || document.title
-    const href = a.href.replace(origin, '')
-    history.replaceState(null, title, href)
-    a.remove()
-    win.emit(href)
+    let url = a.href.replace(origin, '')
+    if (url[0] != '/' || a.dataset.full) {
+      location.href = url
+    } else {
+      history.replaceState(null, '', url)
+      a.remove()
+      win.emit(url)
+    }
   })
 }
 
@@ -65,6 +68,21 @@ export function appendNode(selector: string, node: VNode) {
   createChild(e, node)
 }
 
+export function insertNodeBefore(selector: string, node: VNode) {
+  let e = document.querySelector(selector)
+  if (!e) {
+    console.error(
+      'Failed to query selector when insertNodeBefore, selector:',
+      selector,
+    )
+    throw new Error('Failed to query selector when insertNodeBefore')
+  }
+  let child = createNode(node)
+  if (child !== undefined) {
+    e.before(child)
+  }
+}
+
 export function removeNode(selector: string) {
   let e = document.querySelector(selector)
   if (!e) {
@@ -72,7 +90,7 @@ export function removeNode(selector: string) {
       'Failed to query selector when removeNode, selector:',
       selector,
     )
-    throw new Error('Failed to query selector when removeNode')
+    return
   }
   e.remove()
 }
@@ -128,6 +146,36 @@ export function setValue(selector: string, value: string | number) {
   e.value = value as string
 }
 
+export function redirect(url: string, full?: 1) {
+  if (url[0] != '/' || full) {
+    location.href = url
+  } else {
+    history.replaceState(null, '', url)
+    win.emit(url)
+  }
+}
+
+export function addClass(selector: string, className: string) {
+  let e = document.querySelector(selector)
+  if (!e) {
+    console.error('Failed to query selector when addClass, selector:', selector)
+    throw new Error('Failed to query selector when addClass')
+  }
+  className.split(' ').forEach(c => e.classList.add(c))
+}
+
+export function removeClass(selector: string, className: string) {
+  let e = document.querySelector(selector)
+  if (!e) {
+    console.error(
+      'Failed to query selector when removeClass, selector:',
+      selector,
+    )
+    throw new Error('Failed to query selector when removeClass')
+  }
+  className.split(' ').forEach(c => e.classList.remove(c))
+}
+
 function mountElement(e: Element, element: VElement) {
   let [selector, attrs, children] = element
   applySelector(e, selector)
@@ -152,7 +200,7 @@ function mountElement(e: Element, element: VElement) {
   }
 }
 
-function createElement(element: VElement): Element | null {
+function createElement(element: VElement): Element | undefined {
   let [selector, attrs, children] = element
   if (attrs) {
     let cmd = attrs['data-live']
@@ -162,7 +210,7 @@ function createElement(element: VElement): Element | null {
       case 'redirect': {
         let title = (attrs.title as string) || document.title
         history.replaceState(null, title, attrs.href as string)
-        return null
+        return
       }
       default:
         console.debug('unhandled liveview command:', cmd)
@@ -251,7 +299,7 @@ function createChildren(e: Element, children: VNodeList) {
   children.forEach(node => createChild(e, node))
 }
 
-function createChild(e: Element, node: VNode) {
+function createNode(node: VNode) {
   switch (node) {
     case null:
     case undefined:
@@ -261,28 +309,34 @@ function createChild(e: Element, node: VNode) {
   }
   switch (typeof node) {
     case 'string':
-      e.appendChild(document.createTextNode(node))
-      return
+      return document.createTextNode(node)
     case 'number':
-      e.appendChild(document.createTextNode(String(node)))
-      return
+      return document.createTextNode(String(node))
   }
   if (node[0] === 'raw') {
     node = node as Raw
     const fragment = document.createRange().createContextualFragment(node[1])
     findAndApplyRedirect(fragment)
-    e.appendChild(fragment)
-    return
+    return fragment
   }
   if (Array.isArray(node[0])) {
+    const fragment = document.createDocumentFragment()
     node = node as Fragment
-    node[0].forEach(child => createChild(e, child))
-    return
+    node[0].forEach(child => {
+      let node = createNode(child)
+      if (node !== undefined) {
+        fragment.appendChild(node)
+      }
+    })
+    return fragment
   }
-
   node = node as VElement
-  let element = createElement(node)
-  if (element) {
-    e.appendChild(element)
+  return createElement(node)
+}
+
+function createChild(e: Element, node: VNode) {
+  let child = createNode(node)
+  if (child !== undefined) {
+    e.appendChild(child)
   }
 }

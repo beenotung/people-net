@@ -42,8 +42,17 @@ ion-app.hide {
 
 /* general */
 hr {
-  height: 1px solid;
-  background-color: var(--ion-color-dark);
+  border-color: var(--ion-color-dark);
+}
+ion-title.ios {
+  min-width: fit-content;
+  padding-inline: unset;
+}
+.padding-half {
+  --ion-padding: 8px;
+}
+.margin-half {
+  --ion-margin: 8px;
 }
 `
 

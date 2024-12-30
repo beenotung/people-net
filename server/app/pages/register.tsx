@@ -2,8 +2,13 @@ import { LayoutType, apiEndpointTitle, config, title } from '../../config.js'
 import { commonTemplatePageText } from '../components/common-template.js'
 import { Link } from '../components/router.js'
 import Style from '../components/style.js'
-import { Context, getContextFormBody, WsContext } from '../context.js'
-import { EarlyTerminate, getStringCasual } from '../helpers.js'
+import {
+  Context,
+  getContextFormBody,
+  WsContext,
+  getStringCasual,
+} from '../context.js'
+import { EarlyTerminate } from '../../exception.js'
 import { o } from '../jsx/jsx.js'
 import { find } from 'better-sqlite3-proxy'
 import {
@@ -13,19 +18,21 @@ import {
   googleLogo,
   instagramLogo,
 } from '../svgs/logo.js'
-import { proxy, User } from '../../../db/proxy.js'
+import { proxy } from '../../../db/proxy.js'
 import { ServerMessage } from '../../../client/types.js'
-import { is_email } from '@beenotung/tslib'
+import { is_email, to_full_hk_mobile_phone } from '@beenotung/tslib/validate.js'
 import { Raw } from '../components/raw.js'
 import { hashPassword } from '../../hash.js'
 import { Routes, StaticPageRoute } from '../routes.js'
 import { Node } from '../jsx/types.js'
 import { renderError } from '../components/error.js'
-import { getContextCookies, getWsCookies } from '../cookie.js'
+import { getWsCookies } from '../cookie.js'
 import { getAuthUserId } from '../auth/user.js'
 import { UserMessageInGuestView } from './profile.js'
 import { IonBackButton } from '../components/ion-back-button.js'
 import { wsStatus } from '../components/ws-status.js'
+import { formatTel } from '../components/tel.js'
+import { validateUsername, ValidateUserResult } from '../validate/user.js'
 
 let style = Style(/* css */ `
 .oauth-provider-list a {
@@ -108,9 +115,7 @@ function Main(_attrs: {}, context: Context) {
   return user_id ? <UserMessageInGuestView user_id={user_id} /> : guestView
 }
 
-let useSocialLogin = false
-
-let emailFormBody = (
+let verifyFormBody = (
   <>
     <Field
       label="Email"
@@ -119,6 +124,14 @@ let emailFormBody = (
       msgId="emailMsg"
       oninput="emit('/register/check-email', this.value)"
       autocomplete="email"
+    />
+    <Field
+      label="Phone number"
+      type="tel"
+      name="tel"
+      msgId="telMsg"
+      oninput="emit('/register/check-tel', this.value)"
+      autocomplete="tel"
     />
     {config.layout_type !== LayoutType.ionic ? (
       <div class="field">
@@ -157,7 +170,7 @@ let guestView = (
     </p>
     <div class="flex-center flex-column"></div>
     <div>Register with:</div>
-    {useSocialLogin ? (
+    {config.use_social_login ? (
       <>
         <div class="flex-center flex-column">
           <div class="oauth-provider-list">
@@ -176,12 +189,14 @@ let guestView = (
     <form
       method="POST"
       action="/verify/email/submit"
-      // onsubmit="emitForm(event)"
+      onsubmit="emitForm(event)"
     >
-      {emailFormBody}
+      <p>Register with email or phone number</p>
+      {verifyFormBody}
     </form>
     <div class="or-line flex-center">or</div>
     <form method="POST" action="/register/submit" onsubmit="emitForm(event)">
+      <p>Register with username and password</p>
       <Field
         label="Username"
         name="username"
@@ -241,8 +256,10 @@ function checkPassword (form) {
       Your password is not be stored in plain text.
       <br />
       Instead, it is processed with{' '}
-      <a href="https://en.wikipedia.org/wiki/Bcrypt">bcrypt algorithm</a> to
-      protect your credential against data leak.
+      <a href="https://en.wikipedia.org/wiki/Argon2" target="_blank">
+        Argon2 algorithm
+      </a>{' '}
+      to protect your credential against data leak.
     </div>
     {wsStatus.safeArea}
   </>
@@ -301,7 +318,10 @@ function Field(
   )
 }
 
-function renderErrorMessage(id: string, result: ValidateResult | undefined) {
+function renderErrorMessage(
+  id: string,
+  result: ValidateUserResult | undefined,
+) {
   if (!result) {
     return <div id={id} class="msg"></div>
   }
@@ -325,81 +345,14 @@ function ClearInputContext(_attrs: {}, context: InputContext) {
 
 type InputContext = Context & {
   contextError?: ContextError
-  values?: Record<string, string>
+  values?: Record<string, string | null>
 }
-type ContextError = Record<string, ValidateResult>
-
-type ValidateResult =
-  | { type: 'error'; text: string; extra?: string }
-  | {
-      type: 'found'
-      text: string
-      user: User
-      extra?: string
-    }
-  | { type: 'ok'; text: string; extra?: string }
-
-let minUsername = 1
-let maxUsername = 32
-
-function validateUsername(username: string): ValidateResult {
-  if (!username) {
-    return { type: 'error', text: 'username not provided' }
-  }
-
-  if (username.length < minUsername) {
-    let diff = minUsername - username.length
-    return {
-      type: 'error' as const,
-      text: `username "${username}" is too short, need ${diff} more characters`,
-    }
-  }
-
-  if (username.length > maxUsername) {
-    let diff = username.length - maxUsername
-    return {
-      type: 'error' as const,
-      text: `username "${username}" is too long, need ${diff} less characters`,
-    }
-  }
-
-  if (username.replace(/badminton/g, '').includes('admin')) {
-    return {
-      type: 'error' as const,
-      text: `username cannot contains "admin"`,
-    }
-  }
-
-  let excludedChars = Array.from(
-    new Set(username.replace(/[a-z0-9_]/g, '')),
-  ).join('')
-  if (excludedChars.length > 0) {
-    return {
-      type: 'error' as const,
-      text: `username cannot contains "${excludedChars}"`,
-      extra: `username should only consist of english letters [a-z] and digits [0-9], underscore [_] is also allowed`,
-    }
-  }
-
-  let user = find(proxy.user, { username })
-  if (user) {
-    return {
-      type: 'found' as const,
-      text: `username "${username}" is already used`,
-      user,
-    }
-  }
-
-  return {
-    type: 'ok' as const,
-    text: `username "${username}" is available`,
-  }
-}
+type ContextError = Record<string, ValidateUserResult>
 
 let minPassword = 6
 let maxPassword = 256
 
-function validatePassword(password: string): ValidateResult {
+function validatePassword(password: string): ValidateUserResult {
   if (!password) {
     return { type: 'error', text: 'password not provided' }
   }
@@ -422,8 +375,8 @@ function validatePassword(password: string): ValidateResult {
   return { type: 'ok' as const, text: 'password is acceptable' }
 }
 
-// email is optional
-function validateEmail(email: string): ValidateResult {
+function validateEmail(email: string | null): ValidateUserResult {
+  // email is optional
   if (!email) {
     return { type: 'ok', text: '' }
   }
@@ -439,7 +392,7 @@ function validateEmail(email: string): ValidateResult {
   if (user) {
     return {
       type: 'found' as const,
-      text: `email "${email}" is already used`,
+      text: `email "${email}" has already registered`,
       user,
     }
   }
@@ -447,23 +400,50 @@ function validateEmail(email: string): ValidateResult {
   return { type: 'ok', text: `email "${email}" is valid` }
 }
 
+function validateTel(tel: string | null): ValidateUserResult {
+  // tel is optional
+  if (!tel) {
+    return { type: 'ok', text: '' }
+  }
+
+  tel = to_full_hk_mobile_phone(tel)
+
+  if (!tel) {
+    return {
+      type: 'error',
+      text: 'invalid hk mobile phone number',
+    }
+  }
+
+  let user = find(proxy.user, { tel })
+  if (user) {
+    return {
+      type: 'found' as const,
+      text: `tel "${formatTel(tel)}" has already registered`,
+      user,
+    }
+  }
+
+  return { type: 'ok', text: `tel "${formatTel(tel)}" is valid` }
+}
+
 function validateConfirmPassword(input: {
   password: string
   confirm_password: string
-}): ValidateResult {
+}): ValidateUserResult {
   if (!input.password)
     return {
       type: 'error',
-      text: 'Password not provided',
+      text: 'password not provided',
     }
   if (input.password != input.confirm_password)
     return {
       type: 'error',
-      text: 'Password not matched',
+      text: 'password not matched',
     }
   return {
     type: 'ok',
-    text: 'Password matched',
+    text: 'password matched',
   }
 }
 
@@ -472,7 +452,7 @@ function validateInput(input: {
   field: string
   value: string | void
   selector: string
-  validate: (value: string) => ValidateResult
+  validate: (value: string) => ValidateUserResult
 }) {
   let { context, value, selector } = input
 
@@ -568,13 +548,24 @@ function CheckEmail(_: {}, context: WsContext) {
   })
 }
 
+function CheckTel(_: {}, context: WsContext) {
+  let tel = context.args?.[0] as string
+  validateInput({
+    context,
+    value: tel,
+    field: 'tel',
+    selector: '#telMsg',
+    validate: validateTel,
+  })
+}
+
 async function submit(context: InputContext): Promise<Node> {
   try {
     let body = getContextFormBody(context)
     let input = {
       username: getStringCasual(body, 'username').trim().toLowerCase(),
       password: getStringCasual(body, 'password'),
-      email: getStringCasual(body, 'email').trim().toLowerCase(),
+      email: getStringCasual(body, 'email').trim().toLowerCase() || null,
       confirm_password: getStringCasual(body, 'confirm_password'),
     }
     let results = {
@@ -586,7 +577,7 @@ async function submit(context: InputContext): Promise<Node> {
     let errors = Object.entries(results)
     let hasError = errors.some(entry => entry[1].type != 'ok')
     if (hasError) {
-      context.contextError = Object.fromEntries<ValidateResult>(errors)
+      context.contextError = Object.fromEntries<ValidateUserResult>(errors)
       context.values = input
       return RegisterPage
     }
@@ -596,6 +587,8 @@ async function submit(context: InputContext): Promise<Node> {
       email: input.email,
       tel: null,
       avatar: null,
+      is_admin: null,
+      nickname: null,
     })
 
     let main: Node
@@ -652,7 +645,7 @@ fetch('/login/submit',{
   }
 }
 
-let routes: Routes = {
+let routes = {
   '/register': {
     title: title('Register'),
     description: `Register to access exclusive content and functionality. Join our community on ${config.short_site_name}.`,
@@ -676,6 +669,11 @@ let routes: Routes = {
     description: 'validate email and check availability',
     node: <CheckEmail />,
   },
+  '/register/check-tel': {
+    title: apiEndpointTitle,
+    description: 'validate phone number and check availability',
+    node: <CheckTel />,
+  },
   '/register/submit': {
     async resolve(context): Promise<StaticPageRoute> {
       return {
@@ -685,6 +683,6 @@ let routes: Routes = {
       }
     },
   },
-}
+} satisfies Routes
 
 export default { routes }
